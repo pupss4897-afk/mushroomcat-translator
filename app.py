@@ -18,7 +18,7 @@ st.set_page_config(page_title="香菇爸的貓咪讀心術", page_icon="🍄", l
 st.sidebar.title("🍄 關於香菇爸")
 st.sidebar.info("嗨！我是香菇爸，專精於貓科動物行為分析。這是一個用 AI 幫你聽懂主子心聲的小工具！")
 
-# 👇 你的連結
+# 👇 你的連結 (這裡不用改，維持你原本設定好的)
 YOUR_CHANNEL_LINK = "https://www.instagram.com/love_mushroom55?igsh=NTl4bmg2djJyejFn&utm_source=qr" 
 YOUR_LINE_LINK = "https://s.luckycat.no8.io/link/channels/ZIGreweSIw"
 
@@ -33,16 +33,14 @@ st.sidebar.title("⚙️ 設定")
 # 3. API Key 設定 (智慧判斷版)
 # ==========================================
 if "GOOGLE_API_KEY" in st.secrets:
-    # 情況 A：在 Streamlit 雲端
     api_key = st.secrets["GOOGLE_API_KEY"]
 else:
-    # 情況 B：在本機開發
     default_key = ""
     st.sidebar.warning("⚠️ 目前是「本機開發模式」，請手動輸入 Key")
     api_key = st.sidebar.text_input("輸入 Google API Key", value=default_key, type="password")
 
 # ==========================================
-# 4. 工具函數 (就是這裡遺失了！現在補回來！)
+# 4. 工具函數 (補回來了！)
 # ==========================================
 def clean_json_response(text):
     text = text.strip()
@@ -56,8 +54,9 @@ def clean_json_response(text):
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
+    # 🌟 重點修正：改回最穩定的 1.5 Flash 模型，解決 429 塞車問題
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash", 
+        model_name="gemini-1.5-flash", 
         generation_config={"response_mime_type": "application/json"}
     )
     
@@ -85,12 +84,14 @@ def analyze_video(api_key, video_path, mime_type):
             st.error(f"上傳檔案時發生錯誤: {e}")
             return None
         
+        # 等待處理
         while video_file.state.name == "PROCESSING":
             time.sleep(1)
             video_file = genai.get_file(video_file.name)
             
         if video_file.state.name == "FAILED":
-            st.error("❌ 影片處理失敗。可能原因：影片格式不支援。")
+            st.error("❌ 影片處理失敗。")
+            st.warning("💡 小撇步：這支影片格式 AI 不支援。請試著把影片傳到 LINE 再下載下來，就會變成 AI 喜歡的格式囉！")
             return None
 
         try:
@@ -101,7 +102,7 @@ def analyze_video(api_key, video_path, mime_type):
             except:
                 pass
             
-            # 這裡會呼叫 clean_json_response，所以上面一定要有定義
+            # 使用修復後的工具函數
             clean_text = clean_json_response(response.text)
             json_data = json.loads(clean_text)
             if isinstance(json_data, list): return json_data[0]
@@ -134,12 +135,8 @@ if uploaded_file is not None:
         else:
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
             
-            # 萬能標籤對照表
-            mime_types = {
-                ".mov": "video/quicktime", ".mp4": "video/mp4", ".avi": "video/x-msvideo",
-                ".webm": "video/webm", ".mkv": "video/x-matroska", ".3gp": "video/3gpp"
-            }
-            fix_mime_type = mime_types.get(file_extension, "video/mp4")
+            # 欺騙戰術：全部當成 mp4 餵給 Google
+            fix_mime_type = "video/mp4"
 
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) 
             tfile.write(uploaded_file.read())
