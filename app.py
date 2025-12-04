@@ -29,7 +29,7 @@ st.sidebar.markdown("---")
 st.sidebar.title("⚙️ 設定")
 
 # ==========================================
-# 3. API Key 設定 (智慧判斷版)
+# 3. API Key 設定
 # ==========================================
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
@@ -48,15 +48,15 @@ def clean_json_response(text):
     return text.strip()
 
 # ==========================================
-# 5. 核心功能函數
+# 5. 核心功能函數 (含自動重試機制)
 # ==========================================
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 🌟 修正點：使用全名「gemini-1.5-flash-001」
-    # 這樣 Google 絕對找得到，而且比 2.0 穩定，不會有 429 錯誤
+    # 🌟 修正點：使用最通用的 "gemini-1.5-flash" (去掉 001)
+    # 這是最不容易出錯的名字
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash-001", 
+        model_name="gemini-1.5-flash", 
         generation_config={"response_mime_type": "application/json"}
     )
     
@@ -94,22 +94,37 @@ def analyze_video(api_key, video_path, mime_type):
             st.warning("💡 小撇步：這支影片格式 AI 不支援。請試著把影片傳到 LINE 再下載下來，就會變成 AI 喜歡的格式囉！")
             return None
 
-        try:
-            response = model.generate_content([video_file, prompt])
-            
+        # 🌟 自動重試機制 (解決 429 忙線問題)
+        retry_count = 0
+        max_retries = 3
+        
+        while retry_count < max_retries:
             try:
-                genai.delete_file(video_file.name)
-            except:
-                pass
-            
-            clean_text = clean_json_response(response.text)
-            json_data = json.loads(clean_text)
-            if isinstance(json_data, list): return json_data[0]
-            return json_data
-            
-        except Exception as e:
-            st.error(f"AI 分析時發生錯誤: {e}")
-            return None
+                response = model.generate_content([video_file, prompt])
+                
+                # 成功了！刪除檔案並回傳
+                try:
+                    genai.delete_file(video_file.name)
+                except:
+                    pass
+                
+                clean_text = clean_json_response(response.text)
+                json_data = json.loads(clean_text)
+                if isinstance(json_data, list): return json_data[0]
+                return json_data
+                
+            except Exception as e:
+                # 如果是 429 錯誤 (忙線中)，就等一下再試
+                if "429" in str(e):
+                    retry_count += 1
+                    time.sleep(2) # 等 2 秒
+                    continue
+                else:
+                    st.error(f"AI 分析時發生錯誤: {e}")
+                    return None
+        
+        st.error("系統忙線中，請稍後再試一次 🙏")
+        return None
 
 # ==========================================
 # 6. 主畫面
