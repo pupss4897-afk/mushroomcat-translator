@@ -18,7 +18,6 @@ st.set_page_config(page_title="香菇爸的貓咪讀心術", page_icon="🍄", l
 st.sidebar.title("🍄 關於香菇爸")
 st.sidebar.info("嗨！我是香菇爸，專精於貓科動物行為分析。這是一個用 AI 幫你聽懂主子心聲的小工具！")
 
-# 👇 你的連結 (這裡不用改，維持你原本設定好的)
 YOUR_CHANNEL_LINK = "https://www.instagram.com/love_mushroom55?igsh=NTl4bmg2djJyejFn&utm_source=qr" 
 YOUR_LINE_LINK = "https://s.luckycat.no8.io/link/channels/ZIGreweSIw"
 
@@ -40,7 +39,7 @@ else:
     api_key = st.sidebar.text_input("輸入 Google API Key", value=default_key, type="password")
 
 # ==========================================
-# 4. 工具函數 (補回來了！)
+# 4. 工具函數
 # ==========================================
 def clean_json_response(text):
     text = text.strip()
@@ -54,9 +53,10 @@ def clean_json_response(text):
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 🌟 重點修正：改回最穩定的 1.5 Flash 模型，解決 429 塞車問題
+    # 🌟 修正點：使用全名「gemini-1.5-flash-001」
+    # 這樣 Google 絕對找得到，而且比 2.0 穩定，不會有 429 錯誤
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash", 
+        model_name="gemini-1.5-flash-001", 
         generation_config={"response_mime_type": "application/json"}
     )
     
@@ -102,7 +102,6 @@ def analyze_video(api_key, video_path, mime_type):
             except:
                 pass
             
-            # 使用修復後的工具函數
             clean_text = clean_json_response(response.text)
             json_data = json.loads(clean_text)
             if isinstance(json_data, list): return json_data[0]
@@ -135,7 +134,7 @@ if uploaded_file is not None:
         else:
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
             
-            # 欺騙戰術：全部當成 mp4 餵給 Google
+            # 欺騙戰術
             fix_mime_type = "video/mp4"
 
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) 
