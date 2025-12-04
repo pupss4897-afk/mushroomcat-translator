@@ -53,8 +53,7 @@ def clean_json_response(text):
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 🌟 修正點：使用最通用的 "gemini-1.5-flash" (去掉 001)
-    # 這是最不容易出錯的名字
+    # 🌟 修正點：使用最標準的 gemini-1.5-flash (配合 requirements.txt 更新，一定能抓到)
     model = genai.GenerativeModel(
         model_name="gemini-1.5-flash", 
         generation_config={"response_mime_type": "application/json"}
@@ -84,7 +83,6 @@ def analyze_video(api_key, video_path, mime_type):
             st.error(f"上傳檔案時發生錯誤: {e}")
             return None
         
-        # 等待處理
         while video_file.state.name == "PROCESSING":
             time.sleep(1)
             video_file = genai.get_file(video_file.name)
@@ -94,15 +92,12 @@ def analyze_video(api_key, video_path, mime_type):
             st.warning("💡 小撇步：這支影片格式 AI 不支援。請試著把影片傳到 LINE 再下載下來，就會變成 AI 喜歡的格式囉！")
             return None
 
-        # 🌟 自動重試機制 (解決 429 忙線問題)
+        # 自動重試機制 (解決 429 錯誤)
         retry_count = 0
         max_retries = 3
-        
         while retry_count < max_retries:
             try:
                 response = model.generate_content([video_file, prompt])
-                
-                # 成功了！刪除檔案並回傳
                 try:
                     genai.delete_file(video_file.name)
                 except:
@@ -114,16 +109,15 @@ def analyze_video(api_key, video_path, mime_type):
                 return json_data
                 
             except Exception as e:
-                # 如果是 429 錯誤 (忙線中)，就等一下再試
                 if "429" in str(e):
                     retry_count += 1
-                    time.sleep(2) # 等 2 秒
+                    time.sleep(2)
                     continue
                 else:
                     st.error(f"AI 分析時發生錯誤: {e}")
                     return None
         
-        st.error("系統忙線中，請稍後再試一次 🙏")
+        st.error("系統忙線中 (429)，請稍後再試 🙏")
         return None
 
 # ==========================================
@@ -148,8 +142,6 @@ if uploaded_file is not None:
             st.warning("⚠️ 請輸入 API Key 才能使用喔！")
         else:
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-            
-            # 欺騙戰術
             fix_mime_type = "video/mp4"
 
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) 
