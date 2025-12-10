@@ -13,7 +13,7 @@ import traceback
 st.set_page_config(page_title="香菇爸的貓咪讀心術", page_icon="🍄", layout="wide")
 
 # ==========================================
-# 2. 側邊欄：個人品牌
+# 2. 側邊欄
 # ==========================================
 st.sidebar.title("🍄 關於香菇爸")
 st.sidebar.info("嗨！我是香菇爸，專精於貓科動物行為分析。這是一個用 AI 幫你聽懂主子心聲的小工具！")
@@ -28,9 +28,6 @@ st.sidebar.link_button("🎁 加 LINE 領取「貓咪懶人包」", YOUR_LINE_LI
 st.sidebar.markdown("---")
 st.sidebar.title("⚙️ 設定")
 
-# ==========================================
-# 3. API Key 設定
-# ==========================================
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
 else:
@@ -48,18 +45,17 @@ def clean_json_response(text):
     return text.strip()
 
 # ==========================================
-# 5. 核心功能函數 (自動切換模型版)
+# 核心功能函數 (回歸最穩定的 1.5 Flash)
 # ==========================================
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 候補名單
-    candidate_models = [
-        "gemini-1.5-flash",          
-        "gemini-1.5-flash-001",      
-        "gemini-1.5-pro",            
-        "gemini-2.0-flash"           
-    ]
+    # 🌟 使用最標準、額度最高的 1.5 Flash
+    # 因為我們更新了 requirements.txt，這次一定找得到它！
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash", 
+        generation_config={"response_mime_type": "application/json"}
+    )
     
     prompt = """
     角色: 香菇爸 (資深動物行為學家與貓咪溝通師)。
@@ -78,8 +74,7 @@ def analyze_video(api_key, video_path, mime_type):
     9. hashtags (字串): 適合發在 Instagram 的 5 個標籤。
     """
 
-    with st.spinner('🍄 香菇爸正在跟 AI 連線幫你看貓貓... (若很久沒反應請稍等)'):
-        # 1. 上傳影片
+    with st.spinner('🍄 香菇爸正在跟 AI 連線幫你看貓貓...'):
         try:
             video_file = genai.upload_file(path=video_path, mime_type=mime_type)
         except Exception as e:
@@ -94,40 +89,25 @@ def analyze_video(api_key, video_path, mime_type):
             st.error("❌ 影片處理失敗。可能原因：影片格式不支援。")
             return None
 
-        # 2. 自動切換模型迴圈
-        last_error = None
-        
-        for model_name in candidate_models:
+        try:
+            response = model.generate_content([video_file, prompt])
+            
             try:
-                # print(f"正在嘗試模型: {model_name} ...") 
-                model = genai.GenerativeModel(
-                    model_name=model_name, 
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                
-                response = model.generate_content([video_file, prompt])
-                
-                # 成功後刪除檔案
-                try:
-                    genai.delete_file(video_file.name)
-                except:
-                    pass
-                
-                clean_text = clean_json_response(response.text)
-                json_data = json.loads(clean_text)
-                if isinstance(json_data, list): return json_data[0]
-                
-                return json_data
-
-            except Exception as e:
-                last_error = e
-                continue 
-        
-        st.error(f"抱歉，AI 目前忙碌中。錯誤訊息: {last_error}")
-        return None
+                genai.delete_file(video_file.name)
+            except:
+                pass
+            
+            clean_text = clean_json_response(response.text)
+            json_data = json.loads(clean_text)
+            if isinstance(json_data, list): return json_data[0]
+            return json_data
+            
+        except Exception as e:
+            st.error(f"AI 分析時發生錯誤: {e}")
+            return None
 
 # ==========================================
-# 6. 主畫面
+# 主畫面
 # ==========================================
 st.title("🍄 香菇爸的貓咪讀心術")
 st.markdown("### 📸 上傳影片，讓香菇爸幫你解鎖 **主子在想什麼**！")
@@ -139,7 +119,7 @@ if uploaded_file is not None:
     with col2:
         st.video(uploaded_file)
     
-    # 修正重點：變數定義往上移，防止 NameError
+    # 變數定義在這邊，保證安全
     file_extension = os.path.splitext(uploaded_file.name)[1].lower()
     
     _, btn_col, _ = st.columns([1, 1, 1])
@@ -160,7 +140,6 @@ if uploaded_file is not None:
             tfile.write(uploaded_file.read())
             tfile.close()
             
-            # 修正重點：確保 try 有對應的 except 和 finally
             try:
                 result = analyze_video(api_key, tfile.name, fix_mime_type)
                 
@@ -212,5 +191,3 @@ if uploaded_file is not None:
                 st.code(traceback.format_exc())
             finally:
                 if os.path.exists(tfile.name): os.remove(tfile.name)
-
-# 程式碼結束
