@@ -18,6 +18,7 @@ st.set_page_config(page_title="香菇爸的貓咪讀心術", page_icon="🍄", l
 st.sidebar.title("🍄 關於香菇爸")
 st.sidebar.info("嗨！我是香菇爸，專精於貓科動物行為分析。這是一個用 AI 幫你聽懂主子心聲的小工具！")
 
+# 👇 你的連結
 YOUR_CHANNEL_LINK = "https://www.instagram.com/love_mushroom55?igsh=NTl4bmg2djJyejFn&utm_source=qr" 
 YOUR_LINE_LINK = "https://s.luckycat.no8.io/link/channels/ZIGreweSIw"
 
@@ -39,7 +40,7 @@ else:
     api_key = st.sidebar.text_input("輸入 Google API Key", value=default_key, type="password")
 
 # ==========================================
-# 4. 工具函數
+# 4. 工具函數 (之前缺少的清洗工具)
 # ==========================================
 def clean_json_response(text):
     text = text.strip()
@@ -48,14 +49,14 @@ def clean_json_response(text):
     return text.strip()
 
 # ==========================================
-# 5. 核心功能函數 (含自動重試機制)
+# 5. 核心功能函數
 # ==========================================
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 🌟 修正點：使用最標準的 gemini-1.5-flash (配合 requirements.txt 更新，一定能抓到)
+    # 🌟 這裡改成你帳號專用的 2.0 模型，解決 404 錯誤
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash", 
+        model_name="gemini-2.0-flash", 
         generation_config={"response_mime_type": "application/json"}
     )
     
@@ -65,14 +66,14 @@ def analyze_video(api_key, video_path, mime_type):
     輸出格式: JSON。
     
     請分析以下欄位：
-    1. mood (字串): 當下情緒 (如: 慵懶、狩獵中、鄙視人類)。
+    1. mood (字串): 當下情緒。
     2. intimacy_score (整數 0-100): 親密度。
     3. translation (字串): 第一人稱貓語翻譯 (風格生動、用詞要像貓)。
-    4. reasoning (字串): 判斷依據 (看到什麼動作/聽到什麼聲音)。
-    5. suggestion (字串): 給奴才的建議 (以香菇爸的口吻建議)。
-    6. chonk_score (整數 1-10): 身材圓潤度 (1是極瘦，10是超級胖/阿嬤養的)。
+    4. reasoning (字串): 判斷依據。
+    5. suggestion (字串): 給奴才的建議。
+    6. chonk_score (整數 1-10): 身材圓潤度。
     7. chonk_comment (字串): 對身材的幽默評語。
-    8. cat_mbti (字串): 貓咪的性格類型 (例如: 霸道總裁型、傻白甜型)。
+    8. cat_mbti (字串): 貓咪的性格類型。
     9. hashtags (字串): 適合發在 Instagram 的 5 個標籤。
     """
 
@@ -88,37 +89,26 @@ def analyze_video(api_key, video_path, mime_type):
             video_file = genai.get_file(video_file.name)
             
         if video_file.state.name == "FAILED":
-            st.error("❌ 影片處理失敗。")
-            st.warning("💡 小撇步：這支影片格式 AI 不支援。請試著把影片傳到 LINE 再下載下來，就會變成 AI 喜歡的格式囉！")
+            st.error("❌ 影片處理失敗。可能原因：影片格式不支援。")
             return None
 
-        # 自動重試機制 (解決 429 錯誤)
-        retry_count = 0
-        max_retries = 3
-        while retry_count < max_retries:
+        try:
+            response = model.generate_content([video_file, prompt])
+            
             try:
-                response = model.generate_content([video_file, prompt])
-                try:
-                    genai.delete_file(video_file.name)
-                except:
-                    pass
-                
-                clean_text = clean_json_response(response.text)
-                json_data = json.loads(clean_text)
-                if isinstance(json_data, list): return json_data[0]
-                return json_data
-                
-            except Exception as e:
-                if "429" in str(e):
-                    retry_count += 1
-                    time.sleep(2)
-                    continue
-                else:
-                    st.error(f"AI 分析時發生錯誤: {e}")
-                    return None
-        
-        st.error("系統忙線中 (429)，請稍後再試 🙏")
-        return None
+                genai.delete_file(video_file.name)
+            except:
+                pass
+            
+            clean_text = clean_json_response(response.text)
+            json_data = json.loads(clean_text)
+            if isinstance(json_data, list): return json_data[0]
+            return json_data
+            
+        except Exception as e:
+            # 如果發生錯誤，顯示詳細原因方便除錯
+            st.error(f"AI 分析時發生錯誤: {e}")
+            return None
 
 # ==========================================
 # 6. 主畫面
@@ -142,7 +132,11 @@ if uploaded_file is not None:
             st.warning("⚠️ 請輸入 API Key 才能使用喔！")
         else:
             file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-            fix_mime_type = "video/mp4"
+            mime_types = {
+                ".mov": "video/quicktime", ".mp4": "video/mp4", ".avi": "video/x-msvideo",
+                ".webm": "video/webm", ".mkv": "video/x-matroska", ".3gp": "video/3gpp"
+            }
+            fix_mime_type = mime_types.get(file_extension, "video/mp4")
 
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) 
             tfile.write(uploaded_file.read())
