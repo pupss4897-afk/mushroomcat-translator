@@ -48,19 +48,17 @@ def clean_json_response(text):
     return text.strip()
 
 # ==========================================
-# 5. 核心功能函數 (終極自動切換版)
+# 5. 核心功能函數 (自動切換模型版)
 # ==========================================
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 🌟 這裡就是魔法：我們準備了一張「候補名單」
-    # 程式會一個一個試，直到成功為止！
+    # 候補名單：程式會一個一個試
     candidate_models = [
-        "gemini-1.5-flash",          # 首選 (最快)
-        "gemini-1.5-flash-001",      # 首選的替身
-        "gemini-1.5-flash-latest",   # 首選的最新版
-        "gemini-1.5-pro",            # 穩健版 (比較慢但通常能用)
-        "gemini-2.0-flash"           # 強力版 (容易爆流量，放最後)
+        "gemini-1.5-flash",          
+        "gemini-1.5-flash-001",      
+        "gemini-1.5-pro",            
+        "gemini-2.0-flash"           
     ]
     
     prompt = """
@@ -80,7 +78,7 @@ def analyze_video(api_key, video_path, mime_type):
     9. hashtags (字串): 適合發在 Instagram 的 5 個標籤。
     """
 
-    with st.spinner('🍄 香菇爸正在跟 AI 連線幫你看貓貓...'):
+    with st.spinner('🍄 香菇爸正在跟 AI 連線幫你看貓貓... (若很久沒反應請稍等)'):
         # 1. 上傳影片
         try:
             video_file = genai.upload_file(path=video_path, mime_type=mime_type)
@@ -102,7 +100,7 @@ def analyze_video(api_key, video_path, mime_type):
         for model_name in candidate_models:
             try:
                 # 嘗試使用目前的模型
-                print(f"正在嘗試模型: {model_name} ...")
+                # print(f"正在嘗試模型: {model_name} ...") 
                 model = genai.GenerativeModel(
                     model_name=model_name, 
                     generation_config={"response_mime_type": "application/json"}
@@ -110,9 +108,7 @@ def analyze_video(api_key, video_path, mime_type):
                 
                 response = model.generate_content([video_file, prompt])
                 
-                # 如果成功執行到這裡，代表這個模型可用！
-                # 趕快處理資料並回傳
-                
+                # 成功後刪除檔案
                 try:
                     genai.delete_file(video_file.name)
                 except:
@@ -122,17 +118,14 @@ def analyze_video(api_key, video_path, mime_type):
                 json_data = json.loads(clean_text)
                 if isinstance(json_data, list): return json_data[0]
                 
-                # 成功！離開函數
                 return json_data
 
             except Exception as e:
-                # 如果失敗了，記錄錯誤，然後繼續試下一個模型
-                print(f"模型 {model_name} 失敗: {e}")
+                # 失敗了就換下一個
                 last_error = e
-                continue # 繼續迴圈
+                continue 
         
-        # 如果試了所有模型都失敗
-        st.error(f"抱歉，所有 AI 模型目前都很忙碌。最後一次錯誤: {last_error}")
+        st.error(f"抱歉，AI 目前忙碌中。錯誤訊息: {last_error}")
         return None
 
 # ==========================================
@@ -148,6 +141,9 @@ if uploaded_file is not None:
     with col2:
         st.video(uploaded_file)
     
+    # 🛠️ 修正點：在這裡就先定義好副檔名，保證後面一定讀得到
+    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+    
     _, btn_col, _ = st.columns([1, 1, 1])
     with btn_col:
         analyze_btn = st.button("🔍 香菇爸幫我看！", type="primary", use_container_width=True)
@@ -156,4 +152,26 @@ if uploaded_file is not None:
         if not api_key:
             st.warning("⚠️ 請輸入 API Key 才能使用喔！")
         else:
-            file_extension
+            mime_types = {
+                ".mov": "video/quicktime", ".mp4": "video/mp4", ".avi": "video/x-msvideo",
+                ".webm": "video/webm", ".mkv": "video/x-matroska", ".3gp": "video/3gpp"
+            }
+            fix_mime_type = mime_types.get(file_extension, "video/mp4")
+
+            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) 
+            tfile.write(uploaded_file.read())
+            tfile.close()
+            
+            try:
+                result = analyze_video(api_key, tfile.name, fix_mime_type)
+                
+                if result:
+                    st.divider()
+                    st.header("🗣️ 貓皇聖旨")
+                    st.success(f"### 「{result.get('translation', '人類，朕不想說話')}」")
+                    st.divider()
+
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.subheader("🎭 當下情緒")
+                        st.info(f"**{result.get('mood', '未知')}**")
