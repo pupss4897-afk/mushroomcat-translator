@@ -13,7 +13,7 @@ import traceback
 st.set_page_config(page_title="香菇爸的貓咪讀心術", page_icon="🍄", layout="wide")
 
 # ==========================================
-# 2. 側邊欄
+# 2. 側邊欄：個人品牌
 # ==========================================
 st.sidebar.title("🍄 關於香菇爸")
 st.sidebar.info("嗨！我是香菇爸，專精於貓科動物行為分析。這是一個用 AI 幫你聽懂主子心聲的小工具！")
@@ -45,17 +45,19 @@ def clean_json_response(text):
     return text.strip()
 
 # ==========================================
-# 核心功能函數 (回歸最穩定的 1.5 Flash)
+# 5. 核心功能函數 (全自動模型獵人版)
 # ==========================================
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 🌟 使用最標準、額度最高的 1.5 Flash
-    # 因為我們更新了 requirements.txt，這次一定找得到它！
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash", 
-        generation_config={"response_mime_type": "application/json"}
-    )
+    # 🌟 獵人名單：程式會自動一個一個試，直到成功！
+    model_list = [
+        "gemini-1.5-flash",          # 標準版
+        "gemini-1.5-flash-001",      # 編號版
+        "gemini-1.5-flash-002",      # 更新版
+        "gemini-1.5-pro",            # Pro 版 (比較慢但很穩)
+        "gemini-1.5-pro-001"         # Pro 編號版
+    ]
     
     prompt = """
     角色: 香菇爸 (資深動物行為學家與貓咪溝通師)。
@@ -74,13 +76,16 @@ def analyze_video(api_key, video_path, mime_type):
     9. hashtags (字串): 適合發在 Instagram 的 5 個標籤。
     """
 
-    with st.spinner('🍄 香菇爸正在跟 AI 連線幫你看貓貓...'):
+    with st.spinner('🍄 香菇爸正在努力連線中... (這可能需要一點時間)'):
+        # 1. 上傳影片
         try:
+            print(f"Uploading {video_path}...")
             video_file = genai.upload_file(path=video_path, mime_type=mime_type)
         except Exception as e:
-            st.error(f"上傳檔案時發生錯誤: {e}")
+            st.error(f"上傳檔案失敗: {e}")
             return None
         
+        # 等待處理
         while video_file.state.name == "PROCESSING":
             time.sleep(1)
             video_file = genai.get_file(video_file.name)
@@ -89,25 +94,58 @@ def analyze_video(api_key, video_path, mime_type):
             st.error("❌ 影片處理失敗。可能原因：影片格式不支援。")
             return None
 
-        try:
-            response = model.generate_content([video_file, prompt])
-            
+        # 2. 開始狩獵模型 (Loop)
+        last_error = None
+        success_response = None
+        
+        for model_name in model_list:
             try:
-                genai.delete_file(video_file.name)
-            except:
-                pass
-            
-            clean_text = clean_json_response(response.text)
-            json_data = json.loads(clean_text)
-            if isinstance(json_data, list): return json_data[0]
-            return json_data
-            
-        except Exception as e:
-            st.error(f"AI 分析時發生錯誤: {e}")
+                # 這裡不在介面上顯示，但在後台默默嘗試
+                print(f"Trying model: {model_name}...") 
+                
+                model = genai.GenerativeModel(
+                    model_name=model_name, 
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                
+                # 嘗試生成！
+                response = model.generate_content([video_file, prompt])
+                
+                # 如果跑到這行沒報錯，代表成功了！
+                success_response = response
+                print(f"Success with {model_name}!")
+                break # 離開迴圈，不用再試了
+
+            except Exception as e:
+                # 失敗了就記錄一下，繼續試下一個
+                print(f"Failed with {model_name}: {e}")
+                last_error = e
+                continue
+        
+        # 3. 處理結果
+        try:
+            genai.delete_file(video_file.name) # 刪除雲端檔案
+        except:
+            pass
+
+        if success_response:
+            try:
+                clean_text = clean_json_response(success_response.text)
+                json_data = json.loads(clean_text)
+                if isinstance(json_data, list): return json_data[0]
+                return json_data
+            except Exception as e:
+                st.error(f"資料解析失敗: {e}")
+                return None
+        else:
+            # 如果全部試完都失敗
+            st.error(f"抱歉，目前所有 AI 線路都忙碌中或無法連線。")
+            if last_error:
+                st.expander("查看錯誤詳情").write(f"{last_error}")
             return None
 
 # ==========================================
-# 主畫面
+# 6. 主畫面
 # ==========================================
 st.title("🍄 香菇爸的貓咪讀心術")
 st.markdown("### 📸 上傳影片，讓香菇爸幫你解鎖 **主子在想什麼**！")
@@ -119,7 +157,7 @@ if uploaded_file is not None:
     with col2:
         st.video(uploaded_file)
     
-    # 變數定義在這邊，保證安全
+    # 變數定義往上移，防止 NameError (我修正了這裡)
     file_extension = os.path.splitext(uploaded_file.name)[1].lower()
     
     _, btn_col, _ = st.columns([1, 1, 1])
