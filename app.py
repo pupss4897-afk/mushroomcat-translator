@@ -53,7 +53,7 @@ def clean_json_response(text):
 def analyze_video(api_key, video_path, mime_type):
     genai.configure(api_key=api_key)
     
-    # 候補名單：程式會一個一個試
+    # 候補名單
     candidate_models = [
         "gemini-1.5-flash",          
         "gemini-1.5-flash-001",      
@@ -99,7 +99,6 @@ def analyze_video(api_key, video_path, mime_type):
         
         for model_name in candidate_models:
             try:
-                # 嘗試使用目前的模型
                 # print(f"正在嘗試模型: {model_name} ...") 
                 model = genai.GenerativeModel(
                     model_name=model_name, 
@@ -121,7 +120,6 @@ def analyze_video(api_key, video_path, mime_type):
                 return json_data
 
             except Exception as e:
-                # 失敗了就換下一個
                 last_error = e
                 continue 
         
@@ -141,7 +139,7 @@ if uploaded_file is not None:
     with col2:
         st.video(uploaded_file)
     
-    # 🛠️ 修正點：在這裡就先定義好副檔名，保證後面一定讀得到
+    # 修正重點：變數定義往上移，防止 NameError
     file_extension = os.path.splitext(uploaded_file.name)[1].lower()
     
     _, btn_col, _ = st.columns([1, 1, 1])
@@ -162,6 +160,7 @@ if uploaded_file is not None:
             tfile.write(uploaded_file.read())
             tfile.close()
             
+            # 修正重點：確保 try 有對應的 except 和 finally
             try:
                 result = analyze_video(api_key, tfile.name, fix_mime_type)
                 
@@ -175,3 +174,43 @@ if uploaded_file is not None:
                     with c1:
                         st.subheader("🎭 當下情緒")
                         st.info(f"**{result.get('mood', '未知')}**")
+                        st.write(f"🧐 **判斷:** {result.get('reasoning')}")
+                    with c2:
+                        st.subheader("💞 親密指數")
+                        score = result.get('intimacy_score', 0)
+                        st.progress(score / 100)
+                        st.write(f"**{score} / 100 分**")
+                        st.caption(result.get('suggestion'))
+                    with c3:
+                        st.subheader("🍔 身材評鑑")
+                        chonk = result.get('chonk_score', 5)
+                        chonk_bar = "🍖" * chonk + "░" * (10 - chonk)
+                        st.write(f"{chonk_bar}")
+                        st.write(f"**等級: {chonk}/10**")
+                        st.write(f"📝 *{result.get('chonk_comment')}*")
+
+                    st.divider()
+                    c4, c5 = st.columns(2)
+                    with c4:
+                        st.subheader("🧠 貓格 MBTI")
+                        st.markdown(f"#### 🏷️ {result.get('cat_mbti', '謎樣的貓')}")
+                    with c5:
+                        st.subheader("✨ 網紅標籤")
+                        tags = result.get('hashtags', '#香菇爸 #貓')
+                        st.code(tags, language="markdown")
+                    
+                    st.divider()
+                    st.markdown("### 😲 覺得準嗎？想了解更多貓咪知識？")
+                    cta_col1, cta_col2 = st.columns(2)
+                    with cta_col1:
+                        st.link_button("📺 點我看更多香菇爸的影片", YOUR_CHANNEL_LINK, use_container_width=True)
+                    with cta_col2:
+                        st.link_button("🎁 加 LINE 免費領「養貓懶人包」", YOUR_LINE_LINK, type="primary", use_container_width=True)
+
+            except Exception as e:
+                st.error("系統出錯了！請截圖給工程師")
+                st.code(traceback.format_exc())
+            finally:
+                if os.path.exists(tfile.name): os.remove(tfile.name)
+
+# 程式碼結束
