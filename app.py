@@ -56,7 +56,7 @@ def analyze_video(api_key, video_path, mime_type):
     
     # 🌟 這裡改成你帳號專用的 2.0 模型，解決 404 錯誤
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash-001",
+        model_name="gemini-1.5-flash",
         generation_config={"response_mime_type": "application/json"}
     )
     
