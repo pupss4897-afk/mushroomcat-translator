@@ -14,7 +14,7 @@ from PIL import Image
 st.set_page_config(page_title="香菇爸的貓咪全方位管家", page_icon="🍄", layout="wide")
 
 # ==========================================
-# 2. 側邊欄：個人品牌與導流
+# 2. 側邊欄
 # ==========================================
 st.sidebar.title("🍄 關於香菇爸")
 st.sidebar.info("嗨！我是香菇爸，專精於貓科動物行為與營養分析。")
@@ -28,7 +28,6 @@ st.sidebar.link_button("🎁 加 LINE 領取「貓咪懶人包」", YOUR_LINE_LI
 
 st.sidebar.markdown("---")
 
-# 🌟 功能切換選單 (新增第三個選項)
 app_mode = st.sidebar.radio(
     "請選擇功能：",
     ["🐱 貓咪讀心術 (影片)", "🥫 飼料罐頭分析 (照片)", "📊 熱量&喝水計算機"]
@@ -128,7 +127,7 @@ def analyze_food_image(api_key, image_path, mime_type):
         return None
 
 # ==========================================
-# 功能 C: 熱量與餵食計畫 (新功能)
+# 功能 C: 熱量與餵食計畫
 # ==========================================
 def generate_diet_plan(api_key, cat_profile, calories, water_need):
     genai.configure(api_key=api_key)
@@ -136,23 +135,10 @@ def generate_diet_plan(api_key, cat_profile, calories, water_need):
     prompt = f"""
     角色: 香菇爸 (專業貓咪營養師)。
     任務: 根據貓咪數據，提供餵食建議與乾濕食搭配。
-    
-    [貓咪數據]
-    - 品種: {cat_profile['breed']}
-    - 年齡: {cat_profile['age']} 歲
-    - 體重: {cat_profile['weight']} kg
-    - 狀態: {cat_profile['status']}
-    - 每日建議熱量: {calories:.0f} kcal
-    - 每日建議喝水量: {water_need:.0f} ml
-    - 飼主偏好: {cat_profile['preference']}
-
+    [貓咪數據] {cat_profile}
+    每日建議熱量: {calories:.0f} kcal, 水分: {water_need:.0f} ml.
     輸出格式: JSON。
-    請分析以下欄位：
-    1. feeding_guide (字串): 具體的餵食計畫建議 (例如: 乾乾幾克 + 罐罐幾克)。請根據飼主偏好進行計算分配。
-    2. water_tips (字串): 騙水小技巧 (針對不愛喝水的貓)。
-    3. breed_advice (字串): 針對該品種/年齡的特別健康建議 (例如: 摺耳貓注意關節、公貓注意泌尿)。
-    4. snack_limit (字串): 建議零食上限 (通常不超過總熱量10%)。
-    5. encouragement (字串): 香菇爸給家長的鼓勵。
+    欄位: feeding_guide, water_tips, breed_advice, snack_limit, encouragement.
     """
 
     with st.spinner('🍄 香菇爸正在計算最佳菜單...'):
@@ -276,11 +262,44 @@ elif app_mode == "📊 熱量&喝水計算機":
     with st.form("cat_form"):
         c1, c2 = st.columns(2)
         with c1:
-            cat_breed = st.text_input("🐈 貓咪品種 (例如: 米克斯、英短)", "米克斯")
-            cat_age = st.number_input("🎂 年齡 (歲)", min_value=0.1, max_value=30.0, value=3.0, step=0.5)
-            cat_gender = st.selectbox("⚧️ 性別", ["公", "母"])
+            # 🌟 21種品種清單 + 其他
+            breed_options = [
+                "米克斯 (Mix)", 
+                "英國短毛貓 (British Shorthair)", 
+                "美國短毛貓 (American Shorthair)", 
+                "布偶貓 (Ragdoll)", 
+                "波斯貓 (Persian)", 
+                "曼赤肯 (Munchkin)", 
+                "蘇格蘭摺耳貓 (Scottish Fold)", 
+                "暹羅貓 (Siamese)", 
+                "斯芬克斯無毛貓 (Sphynx)", 
+                "緬因貓 (Maine Coon)", 
+                "俄羅斯藍貓 (Russian Blue)", 
+                "孟加拉貓/豹貓 (Bengal)", 
+                "異國短毛貓/加菲貓 (Exotic)", 
+                "挪威森林貓 (Norwegian Forest)", 
+                "阿比西尼亞貓 (Abyssinian)", 
+                "德文捲毛貓 (Devon Rex)", 
+                "東方短毛貓 (Oriental Shorthair)", 
+                "伯曼貓 (Birman)", 
+                "西伯利亞貓 (Siberian)", 
+                "緬甸貓 (Burmese)", 
+                "埃及貓 (Egyptian Mau)", 
+                "其他 (自行輸入)"
+            ]
+            selected_breed = st.selectbox("🐈 貓咪品種", breed_options)
+            
+            if selected_breed == "其他 (自行輸入)":
+                cat_breed = st.text_input("請輸入品種名稱", "米克斯")
+            else:
+                cat_breed = selected_breed
+
+            # 滑桿設定
+            cat_age = st.slider("🎂 年齡 (歲)", 0.1, 25.0, 3.0, 0.1)
+            cat_gender = st.radio("⚧️ 性別", ["公", "母"], horizontal=True)
+            
         with c2:
-            cat_weight = st.number_input("⚖️ 體重 (kg)", min_value=0.5, max_value=20.0, value=4.0, step=0.1)
+            cat_weight = st.slider("⚖️ 體重 (kg)", 0.1, 20.0, 4.0, 0.1)
             cat_status = st.selectbox("🩺 身體狀態 (決定熱量係數)", 
                 ["已結紮 (標準)", "未結紮 (活動力高)", "過胖/減肥中", "幼貓 (生長中)", "高齡貓 (活動力低)"])
             cat_preference = st.selectbox("🍲 飲食偏好", ["以乾飼料為主", "以濕食(罐頭/生食)為主", "半濕半乾 (一半一半)"])
@@ -291,20 +310,16 @@ elif app_mode == "📊 熱量&喝水計算機":
         if not api_key:
             st.warning("請先在左側輸入 API Key")
         else:
-            # 1. 數學計算 (RER & DER)
             rer = 70 * (cat_weight ** 0.75)
-            
-            # 設定係數
-            factor = 1.2 # 預設已結紮
+            factor = 1.2
             if "未結紮" in cat_status: factor = 1.4
             elif "過胖" in cat_status: factor = 0.8
             elif "幼貓" in cat_status: factor = 2.0
             elif "高齡" in cat_status: factor = 1.0
             
             daily_calories = rer * factor
-            daily_water = cat_weight * 50 # 50-60ml/kg
+            daily_water = cat_weight * 50
             
-            # 2. 呼叫 AI 產生建議
             cat_profile = {
                 "breed": cat_breed, "age": cat_age, "weight": cat_weight,
                 "status": cat_status, "preference": cat_preference
@@ -314,11 +329,10 @@ elif app_mode == "📊 熱量&喝水計算機":
             
             if plan:
                 st.divider()
-                # 顯示大數據
                 m1, m2, m3 = st.columns(3)
-                m1.metric("🔥 每日所需熱量", f"{daily_calories:.0f} kcal")
-                m2.metric("💧 每日建議喝水", f"{daily_water:.0f} ml")
-                m3.metric("⚖️ 體重標準", f"{cat_weight} kg")
+                m1.metric("🔥 每日熱量 (kcal)", f"{daily_calories:.0f}")
+                m2.metric("💧 每日喝水 (ml)", f"{daily_water:.0f}")
+                m3.metric("⚖️ 體重 (kg)", f"{cat_weight}")
                 
                 st.divider()
                 st.subheader("🍽️ 香菇爸的餵食建議")
